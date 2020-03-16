@@ -6,9 +6,10 @@ require 'json'
 require 'date'
 require 'elasticsearch'
 
+File.open('ofac.pid', 'w') {|f| f.write Process.pid } 
 
 PERSISTENT_UPDATE_DATES = '.ofac_update_dates'
-XMLS = ['http://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml', 'http://www.treasury.gov/ofac/downloads/sdn.xml']
+XMLS = ['https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml', 'https://www.treasury.gov/ofac/downloads/sdn.xml']
 UPDATE_INTERVAL = 24*60*60
 if ENV['APP_ENV']
 	APP_ENV = ENV['APP_ENV']
@@ -17,7 +18,7 @@ else
 end
 INDEX = 'ofac_' + APP_ENV
 VINDEX = 'vofac_' + APP_ENV
-ES_HOST = 'localhost'
+ES_HOST = '172.31.26.11'
 
 run_once = ARGV.length > 0
 DEBUG = ENV['DEBUG'] != nil
@@ -95,7 +96,7 @@ begin
   XMLS.each_with_index do |xml_url, source|
     response = HTTParty.head(xml_url)
     date = Date.parse(response.headers['last-modified'])
-    if date > update_dates[xml_url]
+    if update_dates[xml_url] && date && date > update_dates[xml_url]
       puts "+ Updating from #{xml_url} (#{date})"
       doc = Nokogiri::XML(open(xml_url)) do |config|
         config.noblanks
