@@ -27,24 +27,31 @@ def load_to_elastic_search(doc, source)
   client = Elasticsearch::Client.new host: ES_HOST, log: DEBUG
   
   node = doc.root.child
+  index_name = "#{INDEX}_#{source}"
 
   begin
     puts "+ Hiding vofac"
-    client.indices.delete_alias index: INDEX, name: VINDEX
+    client.indices.delete_alias index: index_name, name: VINDEX
   rescue
+    # index or alias does not exist, maybe first run?
   end
   
   begin
-    puts "+ Deleting old entries.. (source:#{source.to_s})"
-    client.delete_by_query(index: INDEX, q: 'source:'+source.to_s)
+    puts "+ Deleting old index.. (#{index_name})"
+    client.indices.delete(index: index_name)
   rescue Elasticsearch::Transport::Transport::Errors::NotFound => not_found
-    client.indices.create(:index => INDEX, :body => JSON.parse(File.open('mapping.json') {|f| d=f.read; f.close; d}))
+    # index does not exist, maybe first run?
   end
+
+  puts "+ Recreating index... (#{index_name})"
+  client.indices.create(:index => index_name, :body => JSON.parse(File.open('mapping.json') {|f| d=f.read; f.close; d}))
+
   count = 0
   puts "+ Inserting entries"
   while node
     if node.class != Nokogiri::XML::Text and node.name == 'sdnEntry'
       node_hash = node.to_hash
+      # We add the source to the indexed document
       node_hash['source'] = source
       client.index(index: INDEX, type: 'entry', body: node_hash)
       if DEBUG
@@ -55,7 +62,7 @@ def load_to_elastic_search(doc, source)
     node = node.next
   end
   puts "+ #{count} entries added"
-  client.indices.put_alias index: INDEX, name: VINDEX
+  client.indices.put_alias index: index_name, name: VINDEX
   puts "+ vofac is available again"
 end
 
